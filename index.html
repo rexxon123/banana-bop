@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Banana Bop</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Luckiest+Guy&family=Nunito:wght@700;900&display=swap" rel="stylesheet">
+<style>
+:root{
+  --sky:#9BE3FF; --banana:#FFD23F; --peach:#FF8C69; --ink:#3B2A5C;
+  --card:#FFF8E1; --cardInk:#3B2A5C;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+  background:var(--sky);
+}
+@media (prefers-color-scheme:dark){ :root:not([data-theme="light"]){ --card:#2B2140; --cardInk:#FFF3C4; } }
+:root[data-theme="dark"]{ --card:#2B2140; --cardInk:#FFF3C4; }
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+html,body{height:100%;margin:0}
+body{background:var(--sky);overflow:hidden;font-family:Nunito,"Trebuchet MS",system-ui,sans-serif;color:var(--ink);
+  touch-action:manipulation;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
+#wrap{position:relative;height:100%}
+canvas{display:block;width:100%;height:100%;cursor:crosshair;touch-action:none}
+#hud{position:absolute;top:10px;left:14px;right:14px;display:flex;justify-content:space-between;align-items:center;pointer-events:none;
+  font-family:"Luckiest Guy","Arial Rounded MT Bold",Impact,sans-serif;font-size:clamp(22px,5.5vw,32px);color:#fff;
+  text-shadow:0 3px 0 var(--ink),2px 0 0 var(--ink),-2px 0 0 var(--ink),0 -2px 0 var(--ink)}
+#mute{pointer-events:auto;font-size:22px;background:rgba(255,255,255,.75);border:3px solid var(--ink);border-radius:50%;width:46px;height:46px;
+  padding:0;margin:0;box-shadow:0 3px 0 var(--ink);cursor:pointer;text-shadow:none}
+.overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(59,42,92,.35)}
+.panel{background:var(--card);color:var(--cardInk);border:4px solid var(--ink);border-radius:30px;padding:26px 22px 28px;max-width:360px;text-align:center;box-shadow:0 8px 0 var(--ink)}
+h1{font-family:"Luckiest Guy","Arial Rounded MT Bold",Impact,sans-serif;font-weight:400;font-size:clamp(44px,12vw,64px);margin:0 0 4px;line-height:1;
+  color:var(--banana);-webkit-text-stroke:2px var(--ink);paint-order:stroke fill;text-shadow:0 5px 0 var(--ink);transform:rotate(-3deg)}
+p{margin:10px 0;font-size:18px;line-height:1.45}
+.big{font-family:"Luckiest Guy","Arial Rounded MT Bold",Impact,sans-serif;font-size:52px;margin:6px 0;line-height:1}
+.play{font-family:"Luckiest Guy","Arial Rounded MT Bold",Impact,sans-serif;font-size:28px;background:var(--peach);color:#fff;border:4px solid var(--ink);
+  border-radius:999px;padding:12px 38px 8px;margin-top:14px;box-shadow:0 6px 0 var(--ink);cursor:pointer;text-shadow:0 2px 0 var(--ink)}
+.play:active{transform:translateY(4px);box-shadow:0 2px 0 var(--ink)}
+button:focus-visible{outline:4px dashed var(--ink);outline-offset:4px}
+.creator{display:flex;align-items:center;justify-content:center;gap:12px;margin:12px 0 2px}
+.avatar{width:92px;flex:none}
+.avatar svg{display:block;width:100%;height:auto}
+.creator p{margin:0;text-align:left;font-weight:900;font-size:19px;max-width:150px;line-height:1.3}
+.hidden{display:none}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="c" aria-label="Banana Bop play field"></canvas>
+  <div id="hud">
+    <span id="score">🍌 0</span>
+    <button id="mute" aria-label="Sound on or off">🔊</button>
+    <span id="time">⏱ 60</span>
+  </div>
+  <div class="overlay" id="start">
+    <div class="panel">
+      <h1>Banana Bop</h1>
+      <div class="creator"><div class="avatar" id="avatarStart" role="img" aria-label="Cartoon of Cyrus, who created this game"></div><p>Created by Cyrus! 🍌</p></div>
+      <p>The Bonkers are wandering around with bananas on their heads. Tap one to toss a squishy foam ball and bop the banana off!</p>
+      <p>Golden bananas are worth 5 points. You have 60 seconds.</p>
+      <button class="play" id="go">Play</button>
+    </div>
+  </div>
+  <div class="overlay hidden" id="end">
+    <div class="panel">
+      <h1 id="endTitle">Nice bopping!</h1>
+      <div class="big" id="final">0</div>
+      <p id="bestLine">bananas bopped</p>
+      <button class="play" id="again">Play again</button>
+    </div>
+  </div>
+</div>
+<script>
+const cv=document.getElementById('c'),ctx=cv.getContext('2d');
+const $=id=>document.getElementById(id);
+function avatarSVG(ball){return `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="270" viewBox="0 0 200 270"><g stroke="#3B2A5C" stroke-width="4" stroke-linejoin="round" stroke-linecap="round">
+<rect x="76" y="196" width="18" height="44" rx="8" fill="#D9A27A"/><rect x="106" y="196" width="18" height="44" rx="8" fill="#D9A27A"/>
+<ellipse cx="82" cy="248" rx="19" ry="10" fill="#2B3350"/><ellipse cx="118" cy="248" rx="19" ry="10" fill="#2B3350"/>
+<path d="M70 252 H94 M106 252 H130" stroke="#fff" stroke-width="3"/>
+<path d="M66 168 H134 L138 210 H106 L100 192 L94 210 H62 Z" fill="#2B3350"/>
+<rect x="90" y="110" width="20" height="16" rx="4" fill="#D9A27A"/>
+<path d="M60 128 Q50 158 54 186" fill="none" stroke-width="18"/><path d="M60 128 Q50 158 54 186" fill="none" stroke="#D9A27A" stroke-width="10"/><circle cx="54" cy="190" r="9" fill="#D9A27A"/>
+<path d="M140 128 Q160 108 168 80" fill="none" stroke-width="18"/><path d="M140 128 Q160 108 168 80" fill="none" stroke="#D9A27A" stroke-width="10"/><circle cx="169" cy="74" r="10" fill="#D9A27A"/>
+<path d="M62 122 Q100 110 138 122 L142 174 H58 Z" fill="#7C8189"/><path d="M62 122 L48 146 L66 152 Z" fill="#7C8189"/><path d="M138 122 L152 104 L164 118 L144 140 Z" fill="#7C8189"/>
+<circle cx="60" cy="88" r="9" fill="#D9A27A"/><circle cx="140" cy="88" r="9" fill="#D9A27A"/>
+<ellipse cx="100" cy="84" rx="40" ry="40" fill="#D9A27A"/>
+<g fill="#1E1410" stroke-width="3"><circle cx="66" cy="62" r="13"/><circle cx="80" cy="50" r="15"/><circle cx="100" cy="46" r="16"/><circle cx="120" cy="50" r="15"/><circle cx="134" cy="62" r="13"/><circle cx="90" cy="60" r="12"/><circle cx="110" cy="60" r="12"/></g>
+<path d="M78 77 q6-5 12 0 M110 77 q6-5 12 0" fill="none"/>
+<ellipse cx="85" cy="88" rx="5" ry="6" fill="#3B2A5C" stroke="none"/><ellipse cx="115" cy="88" rx="5" ry="6" fill="#3B2A5C" stroke="none"/>
+<circle cx="87" cy="86" r="1.8" fill="#fff" stroke="none"/><circle cx="117" cy="86" r="1.8" fill="#fff" stroke="none"/>
+<ellipse cx="73" cy="102" rx="7" ry="4" fill="#F28C8C" opacity=".55" stroke="none"/><ellipse cx="127" cy="102" rx="7" ry="4" fill="#F28C8C" opacity=".55" stroke="none"/>
+<path d="M80 100 Q100 126 120 100 Z" fill="#fff"/><path d="M80 100 Q100 126 120 100 Z" fill="none"/>
+<path d="M74 26 Q100 46 126 26" fill="none" stroke-width="16"/><path d="M74 26 Q100 46 126 26" fill="none" stroke="#FFE14D" stroke-width="9"/>
+<circle cx="74" cy="26" r="4" fill="#6B4A2B" stroke="none"/><circle cx="126" cy="26" r="4" fill="#6B4A2B" stroke="none"/>
+${ball?'<circle cx="172" cy="54" r="16" fill="#FF6FB5"/><path d="M160 46 Q172 54 184 46" fill="none" stroke="#FFE14D" stroke-width="5"/>':''}
+</g></svg>`}
+const throwerImg=new Image();
+throwerImg.src='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(avatarSVG(false));
+$('avatarStart').innerHTML=avatarSVG(true);
+function thrower(){const h=Math.min(Math.min(window.innerWidth,window.innerHeight*1.2)*.3,window.innerHeight*.3),w=h*200/270;return{x:6,y:H-h*.96,w,h}}
+function handPos(){const t=thrower();return{x:t.x+169*t.w/200,y:t.y+58*t.h/270}}
+function drawThrower(){if(!throwerImg.complete||!throwerImg.naturalWidth)return;const t=thrower();ctx.drawImage(throwerImg,t.x,t.y,t.w,t.h)}
+let W=0,H=0,DPR=1;
+const lanes=[{y:.55,s:.72},{y:.71,s:.86},{y:.88,s:1}];
+const colors=['#FF8C69','#8E7CFF','#3FC1A0','#FF6FB5','#4FA8FF','#FFA94D','#B86BFF'];
+const sayings=['Hey!','Whoa!','Hee hee!','Oopsie!','Boing!','My banana!','Ha ha!','Wheee!'];
+let clouds=[],flowers=[];
+function resize(){
+  DPR=Math.min(window.devicePixelRatio||1,2);
+  const r=cv.getBoundingClientRect();W=r.width;H=r.height;
+  cv.width=Math.round(W*DPR);cv.height=Math.round(H*DPR);ctx.setTransform(DPR,0,0,DPR,0,0);
+  clouds=[0,1,2].map(i=>({x:Math.random()*W,y:H*(.08+i*.09),s:.7+Math.random()*.6,v:8+Math.random()*12}));
+  flowers=Array.from({length:40},()=>({x:Math.random()*W,y:H*(.48+Math.random()*.5),c:['#fff','#FFE14D','#FF9EC7'][Math.floor(Math.random()*3)]}));
+}
+window.addEventListener('resize',resize);resize();
+
+/* ---------- sound ---------- */
+let actx=null,muted=false;
+function tone(f1,f2,dur,type,vol,delay){
+  if(muted)return;
+  try{
+    actx=actx||new (window.AudioContext||window.webkitAudioContext)();
+    const t0=actx.currentTime+(delay||0),o=actx.createOscillator(),g=actx.createGain();
+    o.type=type||'sine';o.frequency.setValueAtTime(f1,t0);o.frequency.exponentialRampToValueAtTime(f2,t0+dur);
+    g.gain.setValueAtTime(vol||.15,t0);g.gain.exponentialRampToValueAtTime(.001,t0+dur);
+    o.connect(g).connect(actx.destination);o.start(t0);o.stop(t0+dur+.02);
+  }catch(e){}
+}
+const sfx={
+  toss:()=>tone(420,900,.12,'triangle',.07),
+  boing:()=>{tone(180,720,.18,'sine',.22);tone(720,260,.22,'sine',.15,.16)},
+  gold:()=>{[660,880,1100,1320].forEach((f,i)=>tone(f,f*1.01,.12,'triangle',.12,i*.07))},
+  miss:()=>tone(260,110,.16,'triangle',.08)
+};
+$('mute').addEventListener('click',()=>{muted=!muted;$('mute').textContent=muted?'🔇':'🔊'});
+
+/* ---------- state ---------- */
+let critters=[],balls=[],bananas=[],pops=[],puffs=[];
+let score=0,timeLeft=60,playing=false,spawnT=0,pointer={x:-999,y:-999};
+const rand=(a,b)=>a+Math.random()*(b-a);
+const pick=a=>a[Math.floor(Math.random()*a.length)];
+function unit(){return Math.min(W,H*1.2)}
+
+function spawn(){
+  const lane=Math.floor(Math.random()*3),L=lanes[lane],dir=Math.random()<.5?1:-1;
+  const r=unit()*.075*L.s;
+  const elapsed=60-timeLeft;
+  const speed=(rand(45,95)+elapsed*1.3)*L.s;
+  critters.push({lane,x:dir>0?-r*2:W+r*2,dir,vx:speed*dir,r,color:pick(colors),banana:true,gold:Math.random()<.12,
+    state:'walk',t:0,phase:rand(0,6),say:'',sayT:0});
+  critters.sort((a,b)=>a.lane-b.lane);
+}
+
+/* ---------- drawing helpers ---------- */
+function circle(x,y,r){ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill()}
+function ellipse(x,y,rx,ry){ctx.beginPath();ctx.ellipse(x,y,Math.max(rx,.1),Math.max(ry,.1),0,0,Math.PI*2);ctx.fill()}
+function shade(hex,amt){const n=parseInt(hex.slice(1),16);let r=(n>>16)+amt,g=((n>>8)&255)+amt,b=(n&255)+amt;
+  r=Math.max(0,Math.min(255,r));g=Math.max(0,Math.min(255,g));b=Math.max(0,Math.min(255,b));return `rgb(${r},${g},${b})`}
+
+function drawBanana(x,y,s,rot,gold){
+  ctx.save();ctx.translate(x,y);ctx.rotate(rot);ctx.lineCap='round';
+  const arc=()=>{ctx.beginPath();ctx.arc(0,-s*.55,s*.85,Math.PI*.2,Math.PI*.8)};
+  if(gold){ctx.shadowColor='#FFF6A8';ctx.shadowBlur=s*.6}
+  ctx.strokeStyle='#3B2A5C';ctx.lineWidth=s*.44;arc();ctx.stroke();
+  ctx.shadowBlur=0;
+  ctx.strokeStyle=gold?'#FFC21A':'#FFE14D';ctx.lineWidth=s*.3;arc();ctx.stroke();
+  ctx.strokeStyle=gold?'#FFF3B0':'#FFF5B8';ctx.lineWidth=s*.08;
+  ctx.beginPath();ctx.arc(0,-s*.55,s*.78,Math.PI*.32,Math.PI*.68);ctx.stroke();
+  ctx.fillStyle='#6B4A2B';
+  const a1=Math.PI*.2,a2=Math.PI*.8,R=s*.85;
+  circle(Math.cos(a1)*R,-s*.55+Math.sin(a1)*R,s*.09);
+  circle(Math.cos(a2)*R,-s*.55+Math.sin(a2)*R,s*.09);
+  if(gold){ctx.fillStyle='#fff';const tw=Math.sin(performance.now()/120)*.5+.5;
+    star(-s*.6,-s*.25,s*.12*tw);star(s*.65,-s*.3,s*.1*(1-tw))}
+  ctx.restore();
+}
+function star(x,y,r){if(r<.5)return;ctx.beginPath();for(let i=0;i<8;i++){const a=i*Math.PI/4,rr=i%2?r*.35:r;ctx.lineTo(x+Math.cos(a)*rr,y+Math.sin(a)*rr)}ctx.closePath();ctx.fill()}
+
+function drawScene(dt){
+  const g=ctx.createLinearGradient(0,0,0,H*.5);g.addColorStop(0,'#5EC8FF');g.addColorStop(1,'#CFF3FF');
+  ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+  ctx.fillStyle='#FFE873';circle(W*.86,H*.12,unit()*.07);
+  ctx.fillStyle='rgba(255,232,115,.35)';circle(W*.86,H*.12,unit()*.1);
+  ctx.fillStyle='#fff';
+  clouds.forEach(c=>{c.x+=c.v*dt;if(c.x>W+120)c.x=-120;const s=unit()*.05*c.s;
+    circle(c.x,c.y,s);circle(c.x+s*1.1,c.y-s*.3,s*1.2);circle(c.x+s*2.2,c.y,s*.9);ellipse(c.x+s*1.1,c.y+s*.4,s*2,s*.6)});
+  ctx.fillStyle='#4DBE7E';circle(W*.15,H*.62,W*.32);circle(W*.85,H*.64,W*.36);
+  ctx.fillStyle='#5FD08C';circle(W*.5,H*.7,W*.38);
+  ctx.fillStyle='#88DC6C';ctx.fillRect(0,H*.47,W,H);
+  lanes.forEach((L,i)=>{ctx.fillStyle=i%2?'rgba(46,140,70,.12)':'rgba(255,255,255,.12)';ctx.fillRect(0,H*L.y-unit()*.02,W,unit()*.04)});
+  flowers.forEach(f=>{ctx.fillStyle=f.c;circle(f.x,f.y,2.5)});
+}
+
+function drawCritter(c){
+  const L=lanes[c.lane],gy=H*L.y,r=c.r;
+  const stopped=c.state==='bopped';
+  const step=stopped?0:Math.sin(c.t*11+c.phase);
+  const hop=stopped?Math.sin(Math.min(c.t,.35)/.35*Math.PI)*r*.5:Math.abs(step)*r*.09;
+  const cx=c.x,cy=gy-r-hop,lw=Math.max(2,r*.08);
+  ctx.fillStyle='rgba(30,70,30,.22)';ellipse(cx,gy,r*.85*(1-hop/(r*1.5)),r*.2);
+  // feet
+  ctx.fillStyle=shade(c.color,-40);
+  ellipse(cx-r*.4+step*r*.18,gy-r*.08-hop*.6,r*.3,r*.17);
+  ellipse(cx+r*.4-step*r*.18,gy-r*.08-hop*.6,r*.3,r*.17);
+  // body
+  ctx.fillStyle=c.color;ctx.strokeStyle='#3B2A5C';ctx.lineWidth=lw;
+  ctx.beginPath();ctx.ellipse(cx,cy,r,r*.95,0,0,Math.PI*2);ctx.fill();ctx.stroke();
+  ctx.fillStyle='rgba(255,255,255,.25)';ellipse(cx-r*.35,cy-r*.45,r*.28,r*.16);
+  // eyes
+  const big=stopped?1.25:1;
+  [-1,1].forEach(s=>{
+    const ex=cx+s*r*.33,ey=cy-r*.15;
+    ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(ex,ey,r*.25*big,0,Math.PI*2);ctx.fill();ctx.lineWidth=lw*.7;ctx.stroke();
+    let px=ex,py=ey;
+    if(!stopped){const a=Math.atan2(pointer.y-ey,pointer.x-ex);px+=Math.cos(a)*r*.1;py+=Math.sin(a)*r*.1}
+    ctx.fillStyle='#3B2A5C';circle(px,py,r*.11*(stopped?.8:1));
+    ctx.fillStyle='#fff';circle(px-r*.04,py-r*.04,r*.035);
+  });
+  // cheeks
+  ctx.fillStyle='rgba(255,120,150,.45)';ellipse(cx-r*.62,cy+r*.18,r*.14,r*.09);ellipse(cx+r*.62,cy+r*.18,r*.14,r*.09);
+  // mouth
+  ctx.strokeStyle='#3B2A5C';ctx.lineWidth=lw;ctx.lineCap='round';
+  if(stopped){ctx.fillStyle='#3B2A5C';ellipse(cx,cy+r*.38,r*.13,r*.17)}
+  else if(c.state==='leave'){ctx.fillStyle='#3B2A5C';ctx.beginPath();ctx.arc(cx,cy+r*.22,r*.28,0,Math.PI);ctx.fill();
+    ctx.fillStyle='#FF7A9A';ellipse(cx,cy+r*.4,r*.13,r*.06)}
+  else{ctx.beginPath();ctx.arc(cx,cy+r*.2,r*.22,Math.PI*.15,Math.PI*.85);ctx.stroke()}
+  // banana
+  if(c.banana) drawBanana(cx,cy-r*1.17,r*.9,Math.sin(c.t*5+c.phase)*.18,c.gold);
+  // speech bubble
+  if(c.say&&c.sayT>0){
+    const fs=Math.max(13,r*.42);ctx.font=`900 ${fs}px Nunito, sans-serif`;
+    const tw=ctx.measureText(c.say).width,bx=cx,by=cy-r*1.75;
+    ctx.globalAlpha=Math.min(1,c.sayT*3);
+    ctx.fillStyle='#fff';ctx.strokeStyle='#3B2A5C';ctx.lineWidth=2.5;
+    ctx.beginPath();ctx.roundRect(bx-tw/2-10,by-fs*.85,tw+20,fs*1.5,fs*.75);ctx.fill();ctx.stroke();
+    ctx.fillStyle='#3B2A5C';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(c.say,bx,by-fs*.1);
+    ctx.globalAlpha=1;
+  }
+}
+
+function ballRadius(){return unit()*.04}
+function drawBall(x,y,r){
+  ctx.fillStyle='#FF6FB5';ctx.strokeStyle='#3B2A5C';ctx.lineWidth=Math.max(2,r*.15);
+  ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill();ctx.stroke();
+  ctx.fillStyle='#FFE14D';ctx.beginPath();ctx.arc(x,y,r*.92,-.5,.5);ctx.lineTo(x,y);ctx.fill();
+  ctx.beginPath();ctx.arc(x,y,r*.92,Math.PI-.5,Math.PI+.5);ctx.lineTo(x,y);ctx.fill();
+  ctx.fillStyle='rgba(255,255,255,.5)';circle(x-r*.35,y-r*.35,r*.25);
+}
+
+/* ---------- game logic ---------- */
+function toss(x,y){
+  if(balls.length>=3)return;
+  sfx.toss();
+  const scaleEnd=.55+.45*Math.max(0,Math.min(1,(y-H*.3)/(H*.6)));
+  const hp=handPos();balls.push({sx:hp.x,sy:hp.y,tx:x,ty:y,t:0,dur:.38,scaleEnd});
+}
+function resolve(b){
+  const x=b.tx,y=b.ty;
+  for(let i=critters.length-1;i>=0;i--){
+    const c=critters[i];if(!c.banana)continue;
+    const gy=H*lanes[c.lane].y,r=c.r,headY=gy-r,banY=headY-r*1.1;
+    if(Math.hypot(x-c.x,y-headY)<r*1.25||Math.hypot(x-c.x,y-banY)<r*1.05){
+      c.banana=false;c.state='bopped';c.t=0;c.say=pick(sayings);c.sayT=1.3;
+      const side=x<c.x?1:-1;
+      bananas.push({x:c.x,y:headY-r*1.17,vx:side*rand(80,220),vy:-rand(380,520),rot:0,vr:side*rand(6,11),s:r*.9,gold:c.gold,gy:gy,bounced:false,life:1.4});
+      const pts=c.gold?5:1;score+=pts;
+      pops.push({x:c.x,y:banY-r*.4,text:c.gold?'+5 ⭐':'+1',t:0,gold:c.gold});
+      c.gold?sfx.gold():sfx.boing();
+      puffs.push({x,y,t:0,hit:true});
+      return;
+    }
+  }
+  sfx.miss();puffs.push({x,y,t:0,hit:false});
+}
+
+function update(dt){
+  if(playing){
+    timeLeft-=dt;
+    if(timeLeft<=0){timeLeft=0;endGame()}
+    spawnT-=dt;
+    const maxC=3+Math.floor((60-timeLeft)/15);
+    if(spawnT<=0&&critters.filter(c=>c.state==='walk').length<maxC){spawn();spawnT=rand(.5,1.3)}
+  }
+  critters.forEach(c=>{
+    c.t+=dt;c.sayT-=dt;
+    if(c.state==='walk')c.x+=c.vx*dt;
+    else if(c.state==='bopped'){if(c.t>.9){c.state='leave';c.t=0;if(Math.random()<.5){c.say='Hee hee!';c.sayT=.9}}}
+    else c.x+=c.vx*2.2*dt;
+  });
+  critters=critters.filter(c=>c.x>-c.r*3&&c.x<W+c.r*3);
+  balls.forEach(b=>{b.t+=dt/b.dur});
+  balls.filter(b=>b.t>=1).forEach(resolve);
+  balls=balls.filter(b=>b.t<1);
+  bananas.forEach(b=>{
+    b.vy+=1300*dt;b.x+=b.vx*dt;b.y+=b.vy*dt;b.rot+=b.vr*dt;
+    if(b.y>b.gy-b.s*.2&&b.vy>0){b.y=b.gy-b.s*.2;if(!b.bounced){b.vy*=-.35;b.vx*=.5;b.vr*=.4;b.bounced=true}else{b.vy=0;b.vx*=.9;b.vr*=.8}}
+    if(b.bounced)b.life-=dt;
+  });
+  bananas=bananas.filter(b=>b.life>0);
+  pops.forEach(p=>p.t+=dt);pops=pops.filter(p=>p.t<1);
+  puffs.forEach(p=>p.t+=dt);puffs=puffs.filter(p=>p.t<.4);
+}
+
+function render(dt){
+  drawScene(dt);
+  // fallen bananas behind critters of nearer lanes: simple approach draws by lane order
+  lanes.forEach((L,li)=>{
+    bananas.filter(b=>Math.abs(b.gy-H*L.y)<1).forEach(b=>{ctx.globalAlpha=Math.min(1,b.life*2);drawBanana(b.x,b.y,b.s,b.rot,b.gold);ctx.globalAlpha=1});
+    critters.filter(c=>c.lane===li).forEach(drawCritter);
+  });
+  puffs.forEach(p=>{
+    const k=p.t/.4;ctx.globalAlpha=1-k;ctx.fillStyle=p.hit?'#FFF6A8':'#ffffff';
+    for(let i=0;i<6;i++){const a=i*Math.PI/3;circle(p.x+Math.cos(a)*k*30,p.y+Math.sin(a)*k*30,6*(1-k)+2)}
+    ctx.globalAlpha=1;
+  });
+  balls.forEach(b=>{
+    const t=Math.min(1,b.t),x=b.sx+(b.tx-b.sx)*t,y=b.sy+(b.ty-b.sy)*t-Math.sin(Math.PI*t)*H*.12;
+    drawBall(x,y,ballRadius()*(1+(b.scaleEnd-1)*t));
+  });
+  drawThrower();
+  if(playing&&balls.length<3){const hp=handPos();drawBall(hp.x,hp.y,ballRadius())}
+  pops.forEach(p=>{
+    const fs=Math.max(24,unit()*.06);ctx.font=`400 ${fs}px "Luckiest Guy", Impact, sans-serif`;
+    ctx.textAlign='center';ctx.textBaseline='middle';ctx.globalAlpha=1-p.t;
+    const y=p.y-p.t*50;ctx.lineWidth=5;ctx.strokeStyle='#3B2A5C';ctx.strokeText(p.text,p.x,y);
+    ctx.fillStyle=p.gold?'#FFC21A':'#fff';ctx.fillText(p.text,p.x,y);ctx.globalAlpha=1;
+  });
+}
+
+let lastScore=-1,lastTime=-1;
+function hud(){
+  if(score!==lastScore){$('score').textContent='🍌 '+score;lastScore=score}
+  const t=Math.ceil(timeLeft);if(t!==lastTime){$('time').textContent='⏱ '+t;lastTime=t}
+}
+
+let prev=performance.now();
+function loop(now){
+  const dt=Math.min(.05,(now-prev)/1000);prev=now;
+  update(dt);render(dt);hud();
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+function pos(e){const r=cv.getBoundingClientRect();return{x:e.clientX-r.left,y:e.clientY-r.top}}
+cv.addEventListener('pointermove',e=>{pointer=pos(e)});
+cv.addEventListener('pointerdown',e=>{pointer=pos(e);if(playing)toss(pointer.x,pointer.y)});
+
+function startGame(){
+  score=0;timeLeft=60;critters=[];balls=[];bananas=[];pops=[];puffs=[];spawnT=0;
+  spawn();spawn();playing=true;
+  $('start').classList.add('hidden');$('end').classList.add('hidden');
+  tone(500,500,.01,'sine',.001);
+}
+function endGame(){
+  playing=false;
+  let best=0;try{best=+localStorage.getItem('bananaBopBest')||0;if(score>best)localStorage.setItem('bananaBopBest',score)}catch(e){}
+  $('final').textContent=score;
+  $('endTitle').textContent=score>=40?'Banana champ!':score>=20?'Super bopper!':'Nice bopping!';
+  $('bestLine').textContent=score>best&&best>0?'points — a new best score!':(best>score?`points — best so far is ${best}`:'points');
+  $('end').classList.remove('hidden');$('again').focus();
+}
+$('go').addEventListener('click',startGame);
+$('again').addEventListener('click',startGame);
+</script>
+</body>
+</html>
